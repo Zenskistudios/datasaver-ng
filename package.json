@@ -1,20 +1,19 @@
 {
-  "name": "files-(3)",
+  "name": "datasaver-ng-proxy",
   "version": "1.0.0",
-  "description": "",
-  "main": "background.js",
+  "description": "DataSaver NG - Proxy server for Nigerian internet users",
+  "main": "proxy.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node proxy.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
-    "cheerio": "^1.2.0",
-    "compression": "^1.8.1",
-    "express": "^5.2.1",
-    "node-fetch": "^3.3.2",
-    "sharp": "^0.35.2"
+    "express": "^4.18.2",
+    "node-fetch": "^2.7.0",
+    "sharp": "^0.33.0",
+    "cheerio": "^1.0.0",
+    "compression": "^1.7.4"
   }
 }
