@@ -1,5 +1,6 @@
 const express = require("express");
-const fetch = require("node-fetch");
+const https = require("https");
+const http = require("http");
 const sharp = require("sharp");
 const cheerio = require("cheerio");
 const compression = require("compression");
@@ -17,10 +18,8 @@ const stats = {
 
 app.use(compression());
 app.use(express.json());
-
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
   next();
 });
 
@@ -36,6 +35,31 @@ function isBlocked(url) {
     const hostname = new URL(url).hostname;
     return BLOCKED_DOMAINS.some((d) => hostname.includes(d));
   } catch { return false; }
+}
+
+// Built-in fetch using http/https modules — no external dependency needed
+function fetchURL(url) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const lib = parsed.protocol === "https:" ? https : http;
+    const options = {
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      headers: { "User-Agent": "DataSaverNG/1.0", "Accept-Encoding": "identity" },
+      timeout: 10000,
+    };
+    const req = lib.get(options, (res) => {
+      // Handle redirects
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return fetchURL(res.headers.location).then(resolve).catch(reject);
+      }
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => resolve({ buffer: Buffer.concat(chunks), contentType: res.headers["content-type"] || "" }));
+    });
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(); reject(new Error("Timeout")); });
+  });
 }
 
 async function compressImage(buffer, contentType) {
@@ -54,28 +78,17 @@ function optimizeHTML(html) {
     const src = $(el).attr("src") || "";
     if (BLOCKED_DOMAINS.some((d) => src.includes(d))) $(el).remove();
   });
-  $("iframe").each((_, el) => {
-    const src = $(el).attr("src") || "";
-    if (isBlocked(src)) $(el).remove();
-  });
   return $.html();
 }
 
 app.get("/proxy", async (req, res) => {
   const targetURL = req.query.url;
   if (!targetURL) return res.status(400).json({ error: "Missing ?url= parameter" });
-  if (isBlocked(targetURL)) {
-    stats.dataSaved += 5000;
-    return res.status(204).end();
-  }
+  if (isBlocked(targetURL)) { stats.dataSaved += 5000; return res.status(204).end(); }
+
   stats.totalRequests++;
   try {
-    const response = await fetch(targetURL, {
-      headers: { "Accept-Encoding": "gzip, deflate", "User-Agent": "DataSaverNG/1.0" },
-      timeout: 10000,
-    });
-    const contentType = response.headers.get("content-type") || "";
-    const buffer = await response.buffer();
+    const { buffer, contentType } = await fetchURL(targetURL);
     const originalSize = buffer.length;
     stats.originalSize += originalSize;
 
@@ -85,7 +98,6 @@ app.get("/proxy", async (req, res) => {
       stats.dataSaved += saved;
       stats.dataUsed += compressed.length;
       res.set("Content-Type", newType);
-      res.set("X-Data-Saved", saved);
       return res.send(compressed);
     }
 
@@ -110,32 +122,16 @@ app.get("/stats", (req, res) => {
   const savedMB = (stats.dataSaved / 1024 / 1024).toFixed(2);
   const savingPercent = stats.originalSize > 0
     ? ((stats.dataSaved / stats.originalSize) * 100).toFixed(1) : 0;
-  res.json({
-    totalRequests: stats.totalRequests,
-    dataSavedMB: savedMB,
-    savingPercent: `${savingPercent}%`,
-    message: `Saved ${savedMB}MB so far!`,
-  });
+  res.json({ totalRequests: stats.totalRequests, dataSavedMB: savedMB, savingPercent: `${savingPercent}%` });
 });
 
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", message: "DataSaver NG proxy running 🚀" });
-});
+app.get("/health", (req, res) => res.json({ status: "ok", message: "DataSaver NG running 🚀" }));
 
-app.get("/", (req, res) => {
-  res.json({
-    name: "DataSaver NG",
-    description: "Proxy server for Nigerian internet users",
-    endpoints: {
-      proxy: "/proxy?url=YOUR_URL",
-      stats: "/stats",
-      health: "/health"
-    }
-  });
-});
+app.get("/", (req, res) => res.json({
+  name: "DataSaver NG",
+  description: "Proxy server for Nigerian internet users 🇳🇬",
+  endpoints: { proxy: "/proxy?url=YOUR_URL", stats: "/stats", health: "/health" }
+}));
 
-app.listen(PORT, () => {
-  console.log(`🚀 DataSaver NG Proxy running on port ${PORT}`);
-});
-
+app.listen(PORT, () => console.log(`🚀 DataSaver NG running on port ${PORT}`));
 module.exports = app;
