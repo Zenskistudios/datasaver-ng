@@ -1,6 +1,6 @@
 // DataSaver NG — Background Service Worker
 
-const PROXY_SERVER = "http://localhost:3000";
+const PROXY_SERVER = "https://datasaver-ng.up.railway.app";
 
 let sessionStats = {
   requestsBlocked: 0,
