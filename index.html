@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DataSaver NG — Your data, your money, protected</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --green:#00c851;
+  --green-dark:#007a3d;
+  --green-dim:#004d26;
+  --bg:#060e0a;
+  --bg2:#0d1a10;
+  --bg3:#112015;
+  --text:#f0f7f2;
+  --muted:#7a9e84;
+  --border:#1a3322;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-height:1.6;overflow-x:hidden}
+
+nav{display:flex;align-items:center;justify-content:space-between;padding:1.2rem 2rem;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(6,14,10,0.92);backdrop-filter:blur(12px);z-index:100}
+.logo{display:flex;align-items:center;gap:0.6rem;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.2rem;color:var(--text)}
+.logo-icon{width:32px;height:32px;background:var(--green);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;color:#000}
+.nav-cta{background:var(--green);color:#000;font-weight:600;font-size:0.9rem;padding:0.5rem 1.2rem;border-radius:8px;text-decoration:none;transition:opacity 0.2s}
+.nav-cta:hover{opacity:0.85}
+
+hero{display:block;padding:5rem 2rem 4rem;max-width:900px;margin:0 auto;text-align:center}
+.flag{font-size:2rem;margin-bottom:1.5rem;display:block}
+h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(2.4rem,6vw,4rem);font-weight:700;line-height:1.1;margin-bottom:1.5rem;letter-spacing:-1px}
+h1 span{color:var(--green)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:560px;margin:0 auto 2.5rem;line-height:1.7}
+.hero-btns{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+.btn-primary{background:var(--green);color:#000;font-weight:700;font-size:1rem;padding:0.85rem 2rem;border-radius:10px;text-decoration:none;transition:all 0.2s;display:inline-flex;align-items:center;gap:0.5rem}
+.btn-primary:hover{background:#00e85c;transform:translateY(-1px)}
+.btn-secondary{background:transparent;color:var(--text);font-weight:500;font-size:1rem;padding:0.85rem 2rem;border-radius:10px;text-decoration:none;border:1px solid var(--border);transition:all 0.2s}
+.btn-secondary:hover{border-color:var(--green);color:var(--green)}
+
+.live-counter{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:2rem;max-width:700px;margin:3rem auto;display:grid;grid-template-columns:repeat(3,1fr);gap:1px}
+.counter-item{text-align:center;padding:1.5rem 1rem;position:relative}
+.counter-item:not(:last-child)::after{content:'';position:absolute;right:0;top:20%;height:60%;width:1px;background:var(--border)}
+.counter-num{font-family:'Space Grotesk',sans-serif;font-size:2.2rem;font-weight:700;color:var(--green);line-height:1}
+.counter-label{font-size:0.8rem;color:var(--muted);margin-top:0.4rem;text-transform:uppercase;letter-spacing:0.05em}
+
+section{padding:4rem 2rem;max-width:900px;margin:0 auto}
+.section-label{font-size:0.75rem;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem}
+h2{font-family:'Space Grotesk',sans-serif;font-size:clamp(1.6rem,4vw,2.4rem);font-weight:700;line-height:1.2;margin-bottom:1rem;letter-spacing:-0.5px}
+.section-sub{color:var(--muted);font-size:1rem;margin-bottom:3rem;max-width:560px}
+
+.how-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem}
+.how-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:1.75rem}
+.how-num{font-family:'Space Grotesk',sans-serif;font-size:2.5rem;font-weight:700;color:var(--border);line-height:1;margin-bottom:1rem}
+.how-card h3{font-size:1rem;font-weight:600;margin-bottom:0.5rem;color:var(--text)}
+.how-card p{font-size:0.9rem;color:var(--muted);line-height:1.6}
+
+.savings-bar{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:2.5rem;margin:3rem 0}
+.bar-row{display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem}
+.bar-label{font-size:0.85rem;color:var(--muted);width:160px;flex-shrink:0}
+.bar-track{flex:1;background:var(--bg3);border-radius:4px;height:10px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;background:var(--green);position:relative}
+.bar-pct{font-size:0.85rem;font-weight:600;color:var(--green);width:48px;text-align:right;flex-shrink:0}
+
+.install-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-top:2rem}
+.step{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;display:flex;gap:1rem;align-items:flex-start}
+.step-dot{width:28px;height:28px;background:var(--green-dim);border:1px solid var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;color:var(--green);flex-shrink:0;margin-top:2px}
+.step h4{font-size:0.9rem;font-weight:600;margin-bottom:0.25rem}
+.step p{font-size:0.82rem;color:var(--muted)}
+
+.faq{border-top:1px solid var(--border)}
+.faq-item{border-bottom:1px solid var(--border);padding:1.5rem 0}
+.faq-q{font-weight:600;font-size:0.95rem;margin-bottom:0.5rem;color:var(--text)}
+.faq-a{font-size:0.9rem;color:var(--muted);line-height:1.6}
+
+footer{border-top:1px solid var(--border);padding:2rem;text-align:center;color:var(--muted);font-size:0.85rem}
+footer a{color:var(--green);text-decoration:none}
+
+.pill{display:inline-flex;align-items:center;gap:0.4rem;background:var(--green-dim);border:1px solid var(--green-dark);color:var(--green);font-size:0.78rem;font-weight:600;padding:0.3rem 0.8rem;border-radius:100px;margin-bottom:1.5rem}
+.dot-live{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+@media(max-width:600px){
+  nav{padding:1rem 1.2rem}
+  hero{padding:3rem 1.2rem 2rem}
+  .live-counter{grid-template-columns:1fr;gap:0}
+  .counter-item::after{display:none}
+  .bar-label{width:120px;font-size:0.78rem}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">
+    <div class="logo-icon">D</div>
+    DataSaver NG
+  </div>
+  <a href="https://chrome.google.com/webstore" class="nav-cta">Add to Chrome — Free</a>
+</nav>
+
+<hero>
+  <span class="flag">🇳🇬</span>
+  <div class="pill"><span class="dot-live"></span> Live & saving data right now</div>
+  <h1>Stop burning through<br/><span>your data plan</span></h1>
+  <p class="hero-sub">DataSaver NG compresses images, blocks trackers, and strips ad scripts before they reach your browser — so every MB goes further.</p>
+  <div class="hero-btns">
+    <a href="https://chrome.google.com/webstore" class="btn-primary">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      Add to Chrome — It's Free
+    </a>
+    <a href="#how" class="btn-secondary">See how it works</a>
+  </div>
+</hero>
+
+<div style="max-width:900px;margin:0 auto;padding:0 2rem">
+  <div class="live-counter">
+    <div class="counter-item">
+      <div class="counter-num" id="c-saved">0.06</div>
+      <div class="counter-label">MB saved today</div>
+    </div>
+    <div class="counter-item">
+      <div class="counter-num" id="c-blocked">15+</div>
+      <div class="counter-label">trackers blocked</div>
+    </div>
+    <div class="counter-item">
+      <div class="counter-num">75%</div>
+      <div class="counter-label">less data on images</div>
+    </div>
+  </div>
+</div>
+
+<section id="how">
+  <div class="section-label">How it works</div>
+  <h2>Four ways we save your data</h2>
+  <p class="section-sub">Every time you browse, DataSaver NG is working behind the scenes.</p>
+  <div class="how-grid">
+    <div class="how-card">
+      <div class="how-num">01</div>
+      <h3>Image compression</h3>
+      <p>Every image is converted to WebP format at 60% quality — saving up to 70% on images alone without visible loss.</p>
+    </div>
+    <div class="how-card">
+      <div class="how-num">02</div>
+      <h3>Tracker blocking</h3>
+      <p>Google Analytics, Facebook Pixel, Taboola, Outbrain — 15+ trackers blocked before they even load.</p>
+    </div>
+    <div class="how-card">
+      <div class="how-num">03</div>
+      <h3>HTML cleanup</h3>
+      <p>Ad scripts and tracking pixels are stripped from every page, removing dead weight that costs you data.</p>
+    </div>
+    <div class="how-card">
+      <div class="how-num">04</div>
+      <h3>Gzip compression</h3>
+      <p>All traffic through our proxy is gzip compressed — text, CSS and JS can shrink by up to 40%.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="section-label">Savings breakdown</div>
+  <h2>Where your data goes — and where we save it</h2>
+  <div class="savings-bar">
+    <div class="bar-row">
+      <div class="bar-label">Images</div>
+      <div class="bar-track"><div class="bar-fill" style="width:70%"></div></div>
+      <div class="bar-pct">70%</div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Tracker scripts</div>
+      <div class="bar-track"><div class="bar-fill" style="width:30%"></div></div>
+      <div class="bar-pct">30%</div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">HTML bloat</div>
+      <div class="bar-track"><div class="bar-fill" style="width:15%"></div></div>
+      <div class="bar-pct">15%</div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Text & CSS</div>
+      <div class="bar-track"><div class="bar-fill" style="width:40%"></div></div>
+      <div class="bar-pct">40%</div>
+    </div>
+    <p style="font-size:0.82rem;color:var(--muted);margin-top:1rem">Combined savings: up to <strong style="color:var(--green)">75% less data</strong> per browsing session on Nigerian news sites.</p>
+  </div>
+</section>
+
+<section id="install">
+  <div class="section-label">Get started</div>
+  <h2>Install in 60 seconds</h2>
+  <p class="section-sub">No signup. No account. Just install and start saving.</p>
+  <div class="install-steps">
+    <div class="step">
+      <div class="step-dot">1</div>
+      <div>
+        <h4>Click "Add to Chrome"</h4>
+        <p>Find DataSaver NG on the Chrome Web Store and click install.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-dot">2</div>
+      <div>
+        <h4>Pin the extension</h4>
+        <p>Click the puzzle icon in Chrome and pin DataSaver NG to your toolbar.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-dot">3</div>
+      <div>
+        <h4>Browse normally</h4>
+        <p>That's it. DataSaver NG works automatically on every site you visit.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-dot">4</div>
+      <div>
+        <h4>Watch the savings</h4>
+        <p>Click the green D icon anytime to see how much data you've saved.</p>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:2.5rem;text-align:center">
+    <a href="https://chrome.google.com/webstore" class="btn-primary" style="font-size:1.1rem;padding:1rem 2.5rem">
+      Add DataSaver NG to Chrome — Free
+    </a>
+  </div>
+</section>
+
+<section>
+  <div class="section-label">FAQ</div>
+  <h2>Common questions</h2>
+  <div class="faq">
+    <div class="faq-item">
+      <div class="faq-q">Does it actually save data?</div>
+      <div class="faq-a">Yes. Unlike most "data savers" that just speed up loading, DataSaver NG physically reduces the size of files downloaded to your browser — starting with images, which account for most of a page's data weight.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Is it free?</div>
+      <div class="faq-a">Completely free. No subscription, no account required, no hidden fees. Built for Nigerians who pay too much for data.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Does it slow down my browser?</div>
+      <div class="faq-a">No — tracker blocking actually makes pages load faster since those scripts never download. Image compression happens on our server before the image reaches you.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Which networks does it work on?</div>
+      <div class="faq-a">All of them — MTN, Airtel, Glo, 9mobile. It works at the browser level so your network doesn't matter.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Is my data safe?</div>
+      <div class="faq-a">We don't store or log your browsing history. The proxy only compresses content as it passes through — nothing is saved on our servers.</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>Built in Nigeria 🇳🇬 for Nigerian internet users &nbsp;·&nbsp; <a href="https://datasaver-ng.vercel.app">API</a> &nbsp;·&nbsp; <a href="https://github.com/Zenskistudios/datasaver-ng">GitHub</a></p>
+  <p style="margin-top:0.5rem;font-size:0.78rem">© 2026 DataSaver NG. Your data, your money, protected.</p>
+</footer>
+
+<script>
+const PROXY = "https://datasaver-ng.vercel.app";
+fetch(`${PROXY}/stats`)
+  .then(r => r.json())
+  .then(data => {
+    if (data.dataSavedMB) {
+      document.getElementById("c-saved").textContent = data.dataSavedMB + " MB";
+    }
+    if (data.totalRequests) {
+      document.getElementById("c-blocked").textContent = data.totalRequests.toLocaleString();
+    }
+  })
+  .catch(() => {});
+</script>
+</body>
+</html>
