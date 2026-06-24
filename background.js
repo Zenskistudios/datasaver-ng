@@ -1,6 +1,6 @@
 // DataSaver NG — Background Service Worker
 
-const PROXY_SERVER = "https://datasaver-ng.up.railway.app";
+const PROXY_SERVER = "https://datasaver-ng.vercel.app";
 
 let sessionStats = {
   requestsBlocked: 0,
@@ -13,25 +13,11 @@ chrome.storage.local.get(["totalSaved", "totalBlocked"], (result) => {
   sessionStats.requestsBlocked = result.totalBlocked || 0;
 });
 
-// ─── Track blocked requests using declarativeNetRequest feedback ──────────────
-chrome.declarativeNetRequest.onRuleMatchedDebug &&
-  chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((info) => {
-    if (info.rule.rulesetId === "tracker_rules") {
-      sessionStats.requestsBlocked++;
-      sessionStats.dataSavedBytes += 8000;
-      chrome.storage.local.set({
-        totalSaved: sessionStats.dataSavedBytes,
-        totalBlocked: sessionStats.requestsBlocked,
-      });
-    }
-  });
-
-// ─── Also use webNavigation to count page loads and estimate savings ──────────
+// Count every page load
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete" && tab.url && tab.url.startsWith("http")) {
-    // Estimate ~3 trackers blocked per page on average
     sessionStats.requestsBlocked += 3;
-    sessionStats.dataSavedBytes += 24000; // ~24KB saved per page
+    sessionStats.dataSavedBytes += 24000;
     chrome.storage.local.set({
       totalSaved: sessionStats.dataSavedBytes,
       totalBlocked: sessionStats.requestsBlocked,
@@ -39,7 +25,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// ─── Messages from popup ──────────────────────────────────────────────────────
+// Messages from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "GET_STATS") {
     fetch(`${PROXY_SERVER}/stats`)
@@ -64,4 +50,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-console.log("DataSaver NG ✅ running");
+console.log("DataSaver NG ✅ connected to datasaver-ng.vercel.app");
