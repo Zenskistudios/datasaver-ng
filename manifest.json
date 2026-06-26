@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "DataSaver NG",
-  "version": "1.0.0",
-  "description": "Save data while browsing — built for Nigerian internet users",
+  "version": "1.1.0",
+  "description": "Save data while browsing — compresses images, blocks trackers. Built for Nigerian internet users.",
   "permissions": [
     "storage",
     "tabs",
@@ -13,6 +13,13 @@
   "background": {
     "service_worker": "background.js"
   },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
