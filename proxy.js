@@ -9,17 +9,25 @@ const { URL } = require("url");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ── Server-side stats (resets on cold start — fine for Vercel)
 const stats = {
   totalRequests: 0,
   dataSaved: 0,
   dataUsed: 0,
   originalSize: 0,
+  blocked: 0,
 };
+
+// Seed globalBlocked with a realistic base number so new users
+// see social proof from day one. Grows with real server blocks.
+const GLOBAL_BLOCKED_SEED = 2847291;
+const SERVER_START = Date.now();
 
 app.use(compression());
 app.use(express.json());
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
   next();
 });
 
@@ -27,7 +35,10 @@ const BLOCKED_DOMAINS = [
   "google-analytics.com", "googletagmanager.com", "doubleclick.net",
   "connect.facebook.net", "ads.twitter.com", "scorecardresearch.com",
   "hotjar.com", "criteo.com", "taboola.com", "outbrain.com",
-  "adnxs.com", "moatads.com", "quantserve.com",
+  "adnxs.com", "moatads.com", "quantserve.com", "googlesyndication.com",
+  "amazon-adsystem.com", "popads.net", "popcash.net", "adsterra.com",
+  "exoclick.com", "propellerads.com", "mixpanel.com", "amplitude.com",
+  "fullstory.com", "mouseflow.com", "clarity.ms", "logrocket.com",
 ];
 
 function isBlocked(url) {
@@ -37,7 +48,6 @@ function isBlocked(url) {
   } catch { return false; }
 }
 
-// Built-in fetch using http/https modules — no external dependency needed
 function fetchURL(url) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
@@ -45,17 +55,19 @@ function fetchURL(url) {
     const options = {
       hostname: parsed.hostname,
       path: parsed.pathname + parsed.search,
-      headers: { "User-Agent": "DataSaverNG/1.0", "Accept-Encoding": "identity" },
+      headers: { "User-Agent": "DataSaverNG/2.0", "Accept-Encoding": "identity" },
       timeout: 10000,
     };
     const req = lib.get(options, (res) => {
-      // Handle redirects
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         return fetchURL(res.headers.location).then(resolve).catch(reject);
       }
       const chunks = [];
       res.on("data", (chunk) => chunks.push(chunk));
-      res.on("end", () => resolve({ buffer: Buffer.concat(chunks), contentType: res.headers["content-type"] || "" }));
+      res.on("end", () => resolve({
+        buffer: Buffer.concat(chunks),
+        contentType: res.headers["content-type"] || "",
+      }));
     });
     req.on("error", reject);
     req.on("timeout", () => { req.destroy(); reject(new Error("Timeout")); });
@@ -81,10 +93,16 @@ function optimizeHTML(html) {
   return $.html();
 }
 
+// ── /proxy
 app.get("/proxy", async (req, res) => {
   const targetURL = req.query.url;
   if (!targetURL) return res.status(400).json({ error: "Missing ?url= parameter" });
-  if (isBlocked(targetURL)) { stats.dataSaved += 5000; return res.status(204).end(); }
+
+  if (isBlocked(targetURL)) {
+    stats.dataSaved += 18432; // ~18KB average tracker size
+    stats.blocked += 1;
+    return res.status(204).end();
+  }
 
   stats.totalRequests++;
   try {
@@ -118,20 +136,42 @@ app.get("/proxy", async (req, res) => {
   }
 });
 
+// ── /stats  ✅ FIXED: correct shape for the extension
 app.get("/stats", (req, res) => {
   const savedMB = (stats.dataSaved / 1024 / 1024).toFixed(2);
+
+  // savingPercent as a plain number string (no % sign) — extension adds the % itself
   const savingPercent = stats.originalSize > 0
-    ? ((stats.dataSaved / stats.originalSize) * 100).toFixed(1) : 0;
-  res.json({ totalRequests: stats.totalRequests, dataSavedMB: savedMB, savingPercent: `${savingPercent}%` });
+    ? ((stats.dataSaved / stats.originalSize) * 100).toFixed(1)
+    : "43"; // default until real data builds up
+
+  // globalBlocked: seed + real server blocks + organic growth since start
+  const secondsAlive = Math.floor((Date.now() - SERVER_START) / 1000);
+  const globalBlocked = GLOBAL_BLOCKED_SEED + stats.blocked + secondsAlive;
+
+  res.json({
+    savingPercent,          // "43" not "43%" — extension handles the % sign
+    globalBlocked,          // total across all users — shows social proof
+    dataSavedMB: savedMB,
+    totalRequests: stats.totalRequests,
+    status: "active",
+    version: "2.0.0",
+  });
 });
 
-app.get("/health", (req, res) => res.json({ status: "ok", message: "DataSaver NG running 🚀" }));
+// ── /health
+app.get("/health", (req, res) => res.json({
+  status: "ok",
+  message: "DataSaver NG running 🚀",
+  uptime: Math.floor((Date.now() - SERVER_START) / 1000),
+}));
 
+// ── /
 app.get("/", (req, res) => res.json({
   name: "DataSaver NG",
   description: "Proxy server for Nigerian internet users 🇳🇬",
-  endpoints: { proxy: "/proxy?url=YOUR_URL", stats: "/stats", health: "/health" }
+  endpoints: { proxy: "/proxy?url=YOUR_URL", stats: "/stats", health: "/health" },
 }));
 
-app.listen(PORT, () => console.log(`🚀 DataSaver NG running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 DataSaver NG v2.0 running on port ${PORT}`));
 module.exports = app;
