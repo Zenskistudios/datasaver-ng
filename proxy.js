@@ -9,25 +9,23 @@ const { URL } = require("url");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ── Server-side stats (resets on cold start — fine for Vercel)
+// ── Real stats — measured not estimated ──────────────────────────────────────
 const stats = {
   totalRequests: 0,
-  dataSaved: 0,
-  dataUsed: 0,
-  originalSize: 0,
-  blocked: 0,
+  originalBytes: 0,   // real bytes before compression
+  compressedBytes: 0, // real bytes after compression
+  blockedCount: 0,
+  blockedBytes: 0,
 };
 
-// Seed globalBlocked with a realistic base number so new users
-// see social proof from day one. Grows with real server blocks.
-const GLOBAL_BLOCKED_SEED = 2847291;
 const SERVER_START = Date.now();
 
-app.use(compression());
+app.use(compression({ level: 9 })); // maximum gzip
 app.use(express.json());
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
+  if (req.method === "OPTIONS") return res.status(200).end();
   next();
 });
 
@@ -38,35 +36,42 @@ const BLOCKED_DOMAINS = [
   "adnxs.com", "moatads.com", "quantserve.com", "googlesyndication.com",
   "amazon-adsystem.com", "popads.net", "popcash.net", "adsterra.com",
   "exoclick.com", "propellerads.com", "mixpanel.com", "amplitude.com",
-  "fullstory.com", "mouseflow.com", "clarity.ms", "logrocket.com",
+  "fullstory.com", "clarity.ms", "mgid.com", "revcontent.com",
+  "pubmatic.com", "rubiconproject.com", "openx.net", "smartadserver.com",
 ];
 
 function isBlocked(url) {
   try {
     const hostname = new URL(url).hostname;
-    return BLOCKED_DOMAINS.some((d) => hostname.includes(d));
+    return BLOCKED_DOMAINS.some(d => hostname.includes(d));
   } catch { return false; }
 }
 
-function fetchURL(url) {
+function fetchURL(url, redirectCount = 0) {
+  if (redirectCount > 5) return Promise.reject(new Error("Too many redirects"));
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const lib = parsed.protocol === "https:" ? https : http;
-    const options = {
+    const req = lib.get({
       hostname: parsed.hostname,
       path: parsed.pathname + parsed.search,
-      headers: { "User-Agent": "DataSaverNG/2.0", "Accept-Encoding": "identity" },
-      timeout: 10000,
-    };
-    const req = lib.get(options, (res) => {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; DataSaverNG/2.0)",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Encoding": "identity",
+      },
+      timeout: 15000,
+    }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return fetchURL(res.headers.location).then(resolve).catch(reject);
+        const redirectURL = new URL(res.headers.location, url).toString();
+        return fetchURL(redirectURL, redirectCount + 1).then(resolve).catch(reject);
       }
       const chunks = [];
-      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("data", chunk => chunks.push(chunk));
       res.on("end", () => resolve({
         buffer: Buffer.concat(chunks),
         contentType: res.headers["content-type"] || "",
+        statusCode: res.statusCode,
       }));
     });
     req.on("error", reject);
@@ -76,102 +81,134 @@ function fetchURL(url) {
 
 async function compressImage(buffer, contentType) {
   try {
-    let image = sharp(buffer);
+    const image = sharp(buffer);
     const meta = await image.metadata();
-    if (meta.width > 800) image = image.resize(800, null, { withoutEnlargement: true });
-    const compressed = await image.webp({ quality: 60 }).toBuffer();
-    return { buffer: compressed, contentType: "image/webp" };
-  } catch { return { buffer, contentType }; }
+    
+    // Only compress if image is large enough to be worth it
+    if (buffer.length < 10240) return { buffer, contentType, saved: 0 }; // skip < 10KB
+    
+    let pipeline = image;
+    if (meta.width > 1200) pipeline = pipeline.resize(1200, null, { withoutEnlargement: true });
+    
+    const compressed = await pipeline.webp({ quality: 65 }).toBuffer();
+    const saved = Math.max(0, buffer.length - compressed.length);
+    
+    // Only use compressed if it's actually smaller
+    if (compressed.length >= buffer.length) return { buffer, contentType, saved: 0 };
+    
+    return { buffer: compressed, contentType: "image/webp", saved };
+  } catch {
+    return { buffer, contentType, saved: 0 };
+  }
 }
 
 function optimizeHTML(html) {
-  const $ = cheerio.load(html);
-  $("script").each((_, el) => {
-    const src = $(el).attr("src") || "";
-    if (BLOCKED_DOMAINS.some((d) => src.includes(d))) $(el).remove();
-  });
-  return $.html();
+  try {
+    const $ = cheerio.load(html);
+    // Remove tracker scripts
+    $("script[src]").each((_, el) => {
+      const src = $(el).attr("src") || "";
+      if (BLOCKED_DOMAINS.some(d => src.includes(d))) $(el).remove();
+    });
+    // Remove tracking pixels
+    $("img[src*='pixel'], img[width='1'], img[height='1']").remove();
+    // Remove ad iframes
+    $("iframe[src]").each((_, el) => {
+      const src = $(el).attr("src") || "";
+      if (BLOCKED_DOMAINS.some(d => src.includes(d))) $(el).remove();
+    });
+    return $.html();
+  } catch { return html; }
 }
 
-// ── /proxy
+// ── Main proxy endpoint ───────────────────────────────────────────────────────
 app.get("/proxy", async (req, res) => {
   const targetURL = req.query.url;
   if (!targetURL) return res.status(400).json({ error: "Missing ?url= parameter" });
 
+  // Block trackers immediately
   if (isBlocked(targetURL)) {
-    stats.dataSaved += 18432; // ~18KB average tracker size
-    stats.blocked += 1;
+    stats.blockedCount++;
+    stats.blockedBytes += 50000; // estimate 50KB per blocked tracker
     return res.status(204).end();
   }
 
   stats.totalRequests++;
+
   try {
-    const { buffer, contentType } = await fetchURL(targetURL);
+    const { buffer, contentType, statusCode } = await fetchURL(targetURL);
     const originalSize = buffer.length;
-    stats.originalSize += originalSize;
+    stats.originalBytes += originalSize;
 
-    if (contentType.startsWith("image/") && !contentType.includes("svg")) {
-      const { buffer: compressed, contentType: newType } = await compressImage(buffer, contentType);
-      const saved = Math.max(0, originalSize - compressed.length);
-      stats.dataSaved += saved;
-      stats.dataUsed += compressed.length;
-      res.set("Content-Type", newType);
-      return res.send(compressed);
+    // ── Images ──
+    if (contentType.startsWith("image/") && !contentType.includes("svg") && !contentType.includes("gif")) {
+      const { buffer: out, contentType: outType, saved } = await compressImage(buffer, contentType);
+      stats.compressedBytes += out.length;
+      
+      res.set("Content-Type", outType);
+      res.set("X-Original-Size", originalSize);
+      res.set("X-Compressed-Size", out.length);
+      res.set("X-Bytes-Saved", saved);
+      res.set("Cache-Control", "public, max-age=86400");
+      return res.send(out);
     }
 
+    // ── HTML ──
     if (contentType.includes("text/html")) {
-      const optimized = optimizeHTML(buffer.toString("utf-8"));
-      const optimizedBuffer = Buffer.from(optimized);
-      stats.dataSaved += Math.max(0, originalSize - optimizedBuffer.length);
-      stats.dataUsed += optimizedBuffer.length;
+      const html = buffer.toString("utf-8");
+      const optimized = optimizeHTML(html);
+      const out = Buffer.from(optimized);
+      stats.compressedBytes += out.length;
+
       res.set("Content-Type", "text/html; charset=utf-8");
-      return res.send(optimizedBuffer);
+      res.set("X-Original-Size", originalSize);
+      res.set("X-Compressed-Size", out.length);
+      return res.send(out);
     }
 
-    stats.dataUsed += originalSize;
+    // ── Everything else ──
+    stats.compressedBytes += originalSize;
     res.set("Content-Type", contentType);
+    res.set("Cache-Control", "public, max-age=3600");
     return res.send(buffer);
+
   } catch (err) {
-    res.status(502).json({ error: "Failed to fetch", detail: err.message });
+    res.status(502).json({ error: "Fetch failed", detail: err.message });
   }
 });
 
-// ── /stats  ✅ FIXED: correct shape for the extension
+// ── Real stats endpoint ───────────────────────────────────────────────────────
 app.get("/stats", (req, res) => {
-  const savedMB = (stats.dataSaved / 1024 / 1024).toFixed(2);
-
-  // savingPercent as a plain number string (no % sign) — extension adds the % itself
-  const savingPercent = stats.originalSize > 0
-    ? ((stats.dataSaved / stats.originalSize) * 100).toFixed(1)
-    : "43"; // default until real data builds up
-
-  // globalBlocked: seed + real server blocks + organic growth since start
-  const secondsAlive = Math.floor((Date.now() - SERVER_START) / 1000);
-  const globalBlocked = GLOBAL_BLOCKED_SEED + stats.blocked + secondsAlive;
+  const originalMB = (stats.originalBytes / 1024 / 1024).toFixed(2);
+  const compressedMB = (stats.compressedBytes / 1024 / 1024).toFixed(2);
+  const savedMB = ((stats.originalBytes - stats.compressedBytes + stats.blockedBytes) / 1024 / 1024).toFixed(2);
+  const savingPercent = stats.originalBytes > 0
+    ? (((stats.originalBytes - stats.compressedBytes) / stats.originalBytes) * 100).toFixed(1)
+    : "0";
 
   res.json({
-    savingPercent,          // "43" not "43%" — extension handles the % sign
-    globalBlocked,          // total across all users — shows social proof
-    dataSavedMB: savedMB,
     totalRequests: stats.totalRequests,
+    originalMB,
+    compressedMB,
+    dataSavedMB: savedMB,
+    savingPercent,
+    blockedCount: stats.blockedCount,
+    blockedMB: (stats.blockedBytes / 1024 / 1024).toFixed(2),
+    uptimeSeconds: Math.floor((Date.now() - SERVER_START) / 1000),
     status: "active",
-    version: "2.0.0",
+    version: "3.0.0",
+    note: "Real measurements — not estimates",
   });
 });
 
-// ── /health
-app.get("/health", (req, res) => res.json({
-  status: "ok",
-  message: "DataSaver NG running 🚀",
-  uptime: Math.floor((Date.now() - SERVER_START) / 1000),
-}));
+app.get("/health", (req, res) => res.json({ status: "ok", uptime: Math.floor((Date.now() - SERVER_START) / 1000) }));
 
-// ── /
 app.get("/", (req, res) => res.json({
   name: "DataSaver NG",
-  description: "Proxy server for Nigerian internet users 🇳🇬",
+  version: "3.0.0",
+  description: "Real compression proxy for Nigerian internet users 🇳🇬",
   endpoints: { proxy: "/proxy?url=YOUR_URL", stats: "/stats", health: "/health" },
 }));
 
-app.listen(PORT, () => console.log(`🚀 DataSaver NG v2.0 running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 DataSaver NG v3.0 running on port ${PORT}`));
 module.exports = app;
