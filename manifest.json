@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DataSaver NG",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "description": "Nigeria's #1 data saver — blocks 150+ trackers, compresses images, saves real naira on every MB.",
   "permissions": [
     "storage",
@@ -17,7 +17,7 @@
     {
       "matches": ["http://*/*", "https://*/*"],
       "js": ["content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_start"
     }
   ],
   "action": {
