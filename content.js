@@ -1,63 +1,100 @@
-// DataSaver NG — Content Script v2.5.0
-// Lightweight: no heavy DOM scanning, no querySelectorAll('*')
+// DataSaver NG — Content Script v3.0.0
+// Real compression: routes images through proxy, measures actual savings
 
-// ── Block ALL popup windows immediately ───────────────────────────────────────
+const PROXY = "https://datasaver-ng.vercel.app";
+let realBytesSaved = 0;
+
+// ── Block popups and notifications ───────────────────────────────────────────
 window.open = () => null;
-
-// ── Block notification scams ──────────────────────────────────────────────────
 if (window.Notification) Notification.requestPermission = () => Promise.resolve("denied");
 
-// ── Block new tab clicks and mousedown ───────────────────────────────────────
+// ── Block redirect clicks ─────────────────────────────────────────────────────
 function blockRedirect(e) {
   const a = e.target.closest('a');
   if (!a) return;
-  const href = a.href || '';
-  const target = (a.target || '').toLowerCase();
-  if (target === '_blank' || target === 'blank') {
-    try {
-      const u = new URL(href);
-      if (u.hostname !== location.hostname) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-      }
-    } catch {}
-  }
+  try {
+    const u = new URL(a.href);
+    if ((a.target === '_blank') && u.hostname !== location.hostname) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  } catch {}
 }
 document.addEventListener('click', blockRedirect, true);
 document.addEventListener('mousedown', blockRedirect, true);
 
-// ── Targeted ad removal — NO querySelectorAll('*') ───────────────────────────
+// ── Route images through proxy for REAL compression ──────────────────────────
+function proxyImage(img) {
+  const src = img.getAttribute('src');
+  if (!src || src.startsWith('data:') || src.startsWith('blob:') || src.includes(PROXY)) return;
+  
+  try {
+    new URL(src); // must be absolute URL
+  } catch { return; }
+
+  // Only proxy images that are reasonably large
+  const w = img.naturalWidth || img.width || parseInt(img.getAttribute('width')) || 0;
+  const h = img.naturalHeight || img.height || parseInt(img.getAttribute('height')) || 0;
+  if (w > 0 && w < 100) return; // skip tiny icons
+  if (h > 0 && h < 50) return;
+
+  const proxiedSrc = `${PROXY}/proxy?url=${encodeURIComponent(src)}`;
+  img.setAttribute('data-original', src);
+  img.setAttribute('data-datasaver', 'true');
+
+  // Measure real savings when image loads
+  img.addEventListener('load', () => {
+    // Fetch headers to get real byte savings
+    fetch(proxiedSrc, { method: 'HEAD' })
+      .then(r => {
+        const saved = parseInt(r.headers.get('X-Bytes-Saved') || '0');
+        if (saved > 0) {
+          realBytesSaved += saved;
+          chrome.runtime.sendMessage({
+            type: "REAL_BYTES_SAVED",
+            bytes: saved,
+          });
+        }
+      })
+      .catch(() => {});
+  }, { once: true });
+
+  img.addEventListener('error', () => {
+    img.src = src; // fallback to original
+    img.removeAttribute('data-datasaver');
+  }, { once: true });
+
+  img.src = proxiedSrc;
+}
+
+function optimizeImages() {
+  document.querySelectorAll('img:not([data-datasaver])').forEach(img => {
+    if (img.complete && img.naturalWidth) {
+      proxyImage(img);
+    } else {
+      img.addEventListener('load', () => proxyImage(img), { once: true });
+    }
+  });
+}
+
+// ── Ad removal ────────────────────────────────────────────────────────────────
 const AD_SELECTORS = [
-  'ins.adsbygoogle',
-  '[data-ad-client]', '[data-ad-slot]',
+  'ins.adsbygoogle', '[data-ad-client]', '[data-ad-slot]',
   'iframe[src*="doubleclick.net"]', 'iframe[src*="googlesyndication.com"]',
   'iframe[src*="adnxs.com"]', 'iframe[src*="adsterra.com"]',
   'iframe[src*="popads.net"]', 'iframe[src*="popcash.net"]',
   'iframe[src*="exoclick.com"]', 'iframe[src*="propellerads.com"]',
   'iframe[src*="hilltopads.net"]', 'iframe[src*="trafficjunky.net"]',
   'iframe[src*="juicyads.com"]', 'iframe[src*="clickadu.com"]',
-  'iframe[src*="mgid.com"]', 'iframe[src*="revcontent.com"]',
-  'iframe[src*="onesignal"]',
+  'iframe[src*="mgid.com"]', 'iframe[src*="onesignal"]',
   '[class*="taboola"]', '[id*="taboola"]',
   '[class*="outbrain"]', '[id*="outbrain"]',
   '[class="ad"]', '[class="ads"]', '[class="ad-unit"]',
   '[class="ad-container"]', '[class="ad-wrapper"]',
   '[class="ad-banner"]', '[class="ad-slot"]',
   '[id="ad-container"]', '[id="ad-wrapper"]',
-  '[id="ad-banner"]', '[id="ad-slot"]',
   'div[id^="div-gpt-ad"]',
 ].join(',');
-
-// Run only once per batch — no continuous scanning
-let removeScheduled = false;
-function scheduleRemove() {
-  if (removeScheduled) return;
-  removeScheduled = true;
-  requestAnimationFrame(() => {
-    removeScheduled = false;
-    removeAds();
-  });
-}
 
 function removeAds() {
   let removed = 0;
@@ -72,23 +109,23 @@ function removeAds() {
   }
 }
 
-// ── Lightweight observer — only watches for new nodes ────────────────────────
+// ── Observer ──────────────────────────────────────────────────────────────────
+let debounceTimer = null;
 const observer = new MutationObserver((mutations) => {
-  // Only react if new nodes were actually added
-  const hasNewNodes = mutations.some(m => m.addedNodes.length > 0);
-  if (hasNewNodes) scheduleRemove();
+  if (!mutations.some(m => m.addedNodes.length > 0)) return;
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    removeAds();
+    optimizeImages();
+  }, 300);
 });
+observer.observe(document.documentElement, { childList: true, subtree: true });
 
-observer.observe(document.documentElement, {
-  childList: true,
-  subtree: true,
-  attributes: false, // Don't watch attribute changes — saves CPU
-  characterData: false,
-});
-
-// ── Run once on load ──────────────────────────────────────────────────────────
+// ── Run ───────────────────────────────────────────────────────────────────────
 removeAds();
+optimizeImages();
 window.addEventListener('load', () => {
   removeAds();
+  optimizeImages();
   setTimeout(removeAds, 1000);
 }, { once: true });
