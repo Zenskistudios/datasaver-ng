@@ -1,183 +1,302 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>DataSaver NG</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      width: 300px;
-      font-family: 'Segoe UI', sans-serif;
-      background: #0a0f1e;
-      color: #fff;
+      width: 320px;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #07090f;
+      color: #e8eaf0;
+      overflow: hidden;
     }
 
+    /* ── HEADER ── */
     .header {
-      background: linear-gradient(135deg, #00c851, #007a3d);
-      padding: 16px 20px;
+      background: linear-gradient(135deg, #00b848 0%, #007a32 60%, #005a24 100%);
+      padding: 18px 20px 14px;
+      position: relative;
+      overflow: hidden;
+    }
+    .header::before {
+      content: '';
+      position: absolute;
+      top: -30px; right: -30px;
+      width: 110px; height: 110px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.06);
+    }
+    .header::after {
+      content: '';
+      position: absolute;
+      bottom: -20px; left: 40px;
+      width: 70px; height: 70px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.04);
+    }
+    .header-top {
       display: flex;
       align-items: center;
       gap: 10px;
+      position: relative;
+      z-index: 1;
     }
-
-    .header h1 {
-      font-size: 18px;
+    .flag { font-size: 26px; }
+    .brand h1 {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      color: #fff;
+    }
+    .brand p {
+      font-size: 10px;
+      color: rgba(255,255,255,0.75);
+      margin-top: 1px;
+      letter-spacing: 0.2px;
+    }
+    .version-badge {
+      margin-left: auto;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.7);
+      font-size: 9px;
       font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 20px;
       letter-spacing: 0.5px;
     }
 
-    .header span {
-      font-size: 11px;
-      opacity: 0.85;
-    }
-
-    .flag { font-size: 22px; }
-
-    .body { padding: 16px; }
-
-    .stat-card {
-      background: #131929;
-      border: 1px solid #1e2d45;
-      border-radius: 12px;
-      padding: 14px 16px;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .stat-icon {
-      font-size: 26px;
-      width: 40px;
+    /* ── HERO STAT ── */
+    .hero {
+      background: linear-gradient(180deg, #0d1420 0%, #0a1019 100%);
+      padding: 20px 20px 16px;
       text-align: center;
+      border-bottom: 1px solid #141e2e;
     }
-
-    .stat-label {
-      font-size: 11px;
-      color: #6b7fa3;
+    .hero-label {
+      font-size: 10px;
+      color: #4a6080;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 2px;
+      letter-spacing: 1.5px;
+      font-weight: 600;
+      margin-bottom: 6px;
     }
-
-    .stat-value {
-      font-size: 22px;
-      font-weight: 700;
-      color: #00c851;
+    .hero-value {
+      font-size: 42px;
+      font-weight: 900;
+      color: #00d455;
+      line-height: 1;
+      letter-spacing: -1px;
+      font-variant-numeric: tabular-nums;
     }
-
-    .stat-sub {
+    .hero-sub {
       font-size: 11px;
-      color: #6b7fa3;
+      color: #3a5070;
+      margin-top: 6px;
+    }
+    .naira-pill {
+      display: inline-block;
+      background: rgba(0, 212, 85, 0.1);
+      border: 1px solid rgba(0, 212, 85, 0.2);
+      color: #00d455;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-top: 8px;
+    }
+
+    /* ── STATS GRID ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: #141e2e;
+      border-top: 1px solid #141e2e;
+      border-bottom: 1px solid #141e2e;
+    }
+    .stat-cell {
+      background: #0a1019;
+      padding: 14px 16px;
+      position: relative;
+    }
+    .stat-cell-label {
+      font-size: 9px;
+      color: #3a5070;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    .stat-cell-value {
+      font-size: 24px;
+      font-weight: 800;
+      color: #c8d8f0;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.5px;
+    }
+    .stat-cell-sub {
+      font-size: 10px;
+      color: #3a5070;
       margin-top: 2px;
     }
-
-    .divider {
-      border: none;
-      border-top: 1px solid #1e2d45;
-      margin: 12px 0;
+    .stat-cell-icon {
+      position: absolute;
+      top: 12px; right: 14px;
+      font-size: 16px;
+      opacity: 0.4;
     }
+    .stat-cell.accent .stat-cell-value { color: #00d455; }
+    .stat-cell.warn .stat-cell-value { color: #ff6b35; }
 
-    .row {
+    /* ── SESSION BAR ── */
+    .session-bar {
+      padding: 10px 16px;
+      background: #080c14;
       display: flex;
+      align-items: center;
       gap: 8px;
+      border-bottom: 1px solid #141e2e;
+    }
+    .session-icon { font-size: 12px; opacity: 0.5; }
+    .session-text {
+      font-size: 10px;
+      color: #3a5070;
+    }
+    .session-uptime {
+      margin-left: auto;
+      font-size: 10px;
+      color: #2a4060;
+      font-variant-numeric: tabular-nums;
     }
 
-    .row .stat-card {
-      flex: 1;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 4px;
-    }
-
-    .row .stat-icon { font-size: 18px; width: auto; }
-
+    /* ── STATUS BAR ── */
     .status-bar {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       padding: 10px 16px;
-      background: #0d1526;
-      border-top: 1px solid #1e2d45;
-      font-size: 11px;
-      color: #6b7fa3;
+      background: #060910;
     }
-
     .dot {
-      width: 7px; height: 7px;
+      width: 6px; height: 6px;
       border-radius: 50%;
-      background: #00c851;
-      animation: pulse 2s infinite;
+      background: #00d455;
+      box-shadow: 0 0 6px #00d455;
+      animation: pulse 2.5s infinite;
+      flex-shrink: 0;
     }
-
-    .dot.offline { background: #ff4444; animation: none; }
-
+    .dot.offline {
+      background: #ff4444;
+      box-shadow: 0 0 6px #ff4444;
+      animation: none;
+    }
     @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
+      0%,100% { opacity: 1; box-shadow: 0 0 4px #00d455; }
+      50%      { opacity: 0.5; box-shadow: 0 0 10px #00d455; }
     }
-
+    #status-text {
+      font-size: 10px;
+      color: #3a5070;
+    }
     #refresh-btn {
       margin-left: auto;
       background: none;
-      border: 1px solid #1e2d45;
-      color: #6b7fa3;
+      border: 1px solid #1a2a40;
+      color: #3a5070;
       border-radius: 6px;
-      padding: 3px 8px;
+      padding: 3px 9px;
       cursor: pointer;
-      font-size: 11px;
+      font-size: 10px;
+      transition: all 0.15s;
+    }
+    #refresh-btn:hover {
+      border-color: #00d455;
+      color: #00d455;
     }
 
-    #refresh-btn:hover { border-color: #00c851; color: #00c851; }
-
-    .loading { color: #6b7fa3; font-size: 13px; text-align: center; padding: 20px 0; }
+    /* ── LOADING ── */
+    .loading {
+      padding: 32px 20px;
+      text-align: center;
+      color: #2a4060;
+      font-size: 12px;
+    }
+    .loading-spinner {
+      width: 24px; height: 24px;
+      border: 2px solid #1a2a40;
+      border-top-color: #00d455;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 10px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
 
+<!-- HEADER -->
 <div class="header">
-  <span class="flag">🇳🇬</span>
-  <div>
-    <h1>DataSaver NG</h1>
-    <span>Your data, your money, protected</span>
+  <div class="header-top">
+    <span class="flag">🇳🇬</span>
+    <div class="brand">
+      <h1>DataSaver NG</h1>
+      <p>Nigeria's #1 data saver extension</p>
+    </div>
+    <span class="version-badge">v2.0</span>
   </div>
 </div>
 
-<div class="body">
-  <div id="loading" class="loading">Loading stats...</div>
-
-  <div id="content" style="display:none">
-    <div class="stat-card">
-      <div class="stat-icon">💾</div>
-      <div>
-        <div class="stat-label">Total Data Saved</div>
-        <div class="stat-value" id="data-saved">0 MB</div>
-        <div class="stat-sub" id="saving-percent">Calculating savings...</div>
-      </div>
-    </div>
-
-    <div class="row">
-      <div class="stat-card">
-        <div class="stat-icon">🚫</div>
-        <div class="stat-label">Blocked</div>
-        <div class="stat-value" id="blocked">0</div>
-        <div class="stat-sub">trackers</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon">⚡</div>
-        <div class="stat-label">Requests</div>
-        <div class="stat-value" id="requests">0</div>
-        <div class="stat-sub">optimized</div>
-      </div>
-    </div>
-  </div>
+<!-- LOADING -->
+<div id="loading" class="loading">
+  <div class="loading-spinner"></div>
+  Loading your stats...
 </div>
 
+<!-- MAIN CONTENT -->
+<div id="content" style="display:none">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-label">Total Data Saved</div>
+    <div class="hero-value" id="data-saved">0 MB</div>
+    <div class="naira-pill" id="naira-saved">₦0 saved</div>
+    <div class="hero-sub" id="saving-sub">Protecting your data on every site</div>
+  </div>
+
+  <!-- Stats grid -->
+  <div class="stats-grid">
+    <div class="stat-cell warn">
+      <div class="stat-cell-icon">🚫</div>
+      <div class="stat-cell-label">Trackers Blocked</div>
+      <div class="stat-cell-value" id="blocked">0</div>
+      <div class="stat-cell-sub">this session</div>
+    </div>
+    <div class="stat-cell accent">
+      <div class="stat-cell-icon">⚡</div>
+      <div class="stat-cell-label">Requests Saved</div>
+      <div class="stat-cell-value" id="requests">0</div>
+      <div class="stat-cell-sub">optimized total</div>
+    </div>
+  </div>
+
+  <!-- Session bar -->
+  <div class="session-bar">
+    <span class="session-icon">🕐</span>
+    <span class="session-text">Session active</span>
+    <span class="session-uptime" id="uptime">0m</span>
+  </div>
+
+</div>
+
+<!-- STATUS BAR -->
 <div class="status-bar">
   <div class="dot" id="status-dot"></div>
-  <span id="status-text">Connecting to proxy...</span>
+  <span id="status-text">Connecting...</span>
   <button id="refresh-btn">↻ Refresh</button>
 </div>
 
