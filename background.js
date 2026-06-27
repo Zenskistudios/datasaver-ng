@@ -1,109 +1,128 @@
-// DataSaver NG — Background Service Worker v2.2.0
+// DataSaver NG — Background Service Worker v3.1.0
 const PROXY_SERVER = "https://datasaver-ng.vercel.app";
 const NAIRA_PER_BYTE = 0.000000953;
-const AVG_TRACKER_SIZE_BYTES = 18432;
 
-let sessionStats = {
-  requestsBlocked: 0,
-  dataSavedBytes: 0,
+let stats = {
+  realBytesSaved: 0,
+  blockedBytes: 0,
+  trackersBlocked: 0,
+  adsRemoved: 0,
   sessionStart: Date.now(),
-  initialized: false,
 };
 
-// ── Load stats ONCE and never reset them ─────────────────────────────────────
-async function loadStoredStats() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(["totalSaved", "totalBlocked", "firstInstall"], (result) => {
-      // KEY FIX: always take the HIGHER value — never let stats go backwards
-      const storedSaved = result.totalSaved || 0;
-      const storedBlocked = result.totalBlocked || 0;
-
-      sessionStats.dataSavedBytes = Math.max(sessionStats.dataSavedBytes, storedSaved);
-      sessionStats.requestsBlocked = Math.max(sessionStats.requestsBlocked, storedBlocked);
-      sessionStats.initialized = true;
-
-      if (!result.firstInstall) {
-        chrome.storage.local.set({ firstInstall: Date.now() });
-      }
+// ── 1. Startup race fix: load persisted stats into a promise ─────────────────
+const statsReady = new Promise((resolve) => {
+  chrome.storage.local.get(
+    ["realSaved", "blockedBytes", "trackersBlocked", "adsRemoved"],
+    (r) => {
+      // Guard against corrupt/negative values
+      stats.realBytesSaved  = Math.max(0, r.realSaved       || 0);
+      stats.blockedBytes    = Math.max(0, r.blockedBytes     || 0);
+      stats.trackersBlocked = Math.max(0, r.trackersBlocked  || 0);
+      stats.adsRemoved      = Math.max(0, r.adsRemoved       || 0);
       resolve();
-    });
-  });
-}
-
-const statsReady = loadStoredStats();
-
-// ── Save stats — always keep the maximum, never overwrite with lower values ───
-function persistStats() {
-  chrome.storage.local.get(["totalSaved", "totalBlocked"], (stored) => {
-    const newSaved = Math.max(sessionStats.dataSavedBytes, stored.totalSaved || 0);
-    const newBlocked = Math.max(sessionStats.requestsBlocked, stored.totalBlocked || 0);
-    
-    // Update in-memory too so we don't lose the max
-    sessionStats.dataSavedBytes = newSaved;
-    sessionStats.requestsBlocked = newBlocked;
-    
-    chrome.storage.local.set({ totalSaved: newSaved, totalBlocked: newBlocked });
-  });
-}
-
-// ── Count real blocked requests ───────────────────────────────────────────────
-chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((info) => {
-  sessionStats.requestsBlocked += 1;
-  sessionStats.dataSavedBytes += AVG_TRACKER_SIZE_BYTES;
-  if (sessionStats.requestsBlocked % 5 === 0) persistStats();
+    }
+  );
 });
 
-// ── Messages ──────────────────────────────────────────────────────────────────
+// ── 2. Debounced persist — batches writes within a 2s window ─────────────────
+let persistTimer = null;
+function persist() {
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    chrome.storage.local.set({
+      realSaved:        stats.realBytesSaved,
+      blockedBytes:     stats.blockedBytes,
+      trackersBlocked:  stats.trackersBlocked,
+      adsRemoved:       stats.adsRemoved,
+    });
+  }, 2000);
+}
+
+// ── 3. Persist immediately when Chrome kills the service worker ───────────────
+chrome.runtime.onSuspend.addListener(() => {
+  clearTimeout(persistTimer); // cancel any pending debounce
+  chrome.storage.local.set({
+    realSaved:        stats.realBytesSaved,
+    blockedBytes:     stats.blockedBytes,
+    trackersBlocked:  stats.trackersBlocked,
+    adsRemoved:       stats.adsRemoved,
+  });
+});
+
+// ── 4. Count real blocked requests ───────────────────────────────────────────
+chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(() => {
+  stats.trackersBlocked++;
+  stats.blockedBytes += 45000;
+  if (stats.trackersBlocked % 10 === 0) persist();
+});
+
+// ── 5. Message handler ────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "REAL_BYTES_SAVED") {
+    stats.realBytesSaved += message.bytes || 0;
+    persist();
+    return;
+  }
+
   if (message.type === "AD_REMOVED") {
-    sessionStats.requestsBlocked += message.count || 1;
-    sessionStats.dataSavedBytes += (message.count || 1) * 8192;
+    stats.adsRemoved  += message.count || 1;
+    stats.blockedBytes += (message.count || 1) * 8000;
+    persist();
     return;
   }
 
   if (message.type === "GET_STATS") {
+    // Wait for storage load before responding (fixes startup race)
     statsReady.then(() => handleGetStats().then(sendResponse));
     return true;
   }
+
+  if (message.type === "RESET_STATS") {
+    stats.realBytesSaved  = 0;
+    stats.blockedBytes    = 0;
+    stats.trackersBlocked = 0;
+    stats.adsRemoved      = 0;
+    stats.sessionStart    = Date.now();
+    clearTimeout(persistTimer);
+    chrome.storage.local.remove([
+      "realSaved",
+      "blockedBytes",
+      "trackersBlocked",
+      "adsRemoved",
+    ]);
+    return;
+  }
 });
 
+// ── 6. Build stats response ───────────────────────────────────────────────────
 async function handleGetStats() {
-  // Always read latest from storage first to get the true max
-  return new Promise((resolve) => {
-    chrome.storage.local.get(["totalSaved", "totalBlocked"], async (stored) => {
-      // Use whichever is higher — storage or memory
-      const trueSaved = Math.max(sessionStats.dataSavedBytes, stored.totalSaved || 0);
-      const trueBlocked = Math.max(sessionStats.requestsBlocked, stored.totalBlocked || 0);
+  const totalSaved = stats.realBytesSaved + stats.blockedBytes;
+  const savedMB    = (totalSaved / 1024 / 1024).toFixed(2);
+  const realMB     = (stats.realBytesSaved / 1024 / 1024).toFixed(2);
+  const nairaVal   = (totalSaved * NAIRA_PER_BYTE).toFixed(2);
+  const uptime     = Math.floor((Date.now() - stats.sessionStart) / 60000);
 
-      // Update memory to reflect truth
-      sessionStats.dataSavedBytes = trueSaved;
-      sessionStats.requestsBlocked = trueBlocked;
+  const localStats = {
+    dataSavedMB:        savedMB,
+    sessionSavedMB:     savedMB,
+    realCompressionMB:  realMB,
+    sessionBlocked:     stats.trackersBlocked,
+    totalRequests:      stats.trackersBlocked + stats.adsRemoved,
+    nairaValue:         nairaVal,
+    uptimeMinutes:      uptime,
+    savingPercent:      "Active",
+  };
 
-      const savedMB = trueSaved / 1024 / 1024;
-      const nairaVal = (trueSaved * NAIRA_PER_BYTE).toFixed(2);
-      const uptime = Math.floor((Date.now() - sessionStats.sessionStart) / 60000);
-
-      const localStats = {
-        sessionSavedMB: savedMB.toFixed(2),
-        dataSavedMB: savedMB.toFixed(2),
-        sessionBlocked: trueBlocked,
-        totalRequests: trueBlocked,
-        nairaValue: nairaVal,
-        uptimeMinutes: uptime,
-        savingPercent: "Active",
-      };
-
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
-        const r = await fetch(`${PROXY_SERVER}/stats`, { signal: controller.signal });
-        clearTimeout(timeout);
-        if (!r.ok) throw new Error("bad response");
-        const serverStats = await r.json();
-        resolve({ ...serverStats, ...localStats });
-      } catch {
-        resolve(localStats);
-      }
-    });
-  });
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const r = await fetch(`${PROXY_SERVER}/stats`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!r.ok) throw new Error();
+    const serverStats = await r.json();
+    return { ...serverStats, ...localStats };
+  } catch {
+    return localStats;
+  }
 }
